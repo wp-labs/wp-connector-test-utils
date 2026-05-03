@@ -1,11 +1,9 @@
 #![allow(dead_code)]
 
+use crate::component_tools::{ComponentTool, RuntimeReason, RuntimeResult, ToolReason};
 use crate::sink::sink_info::SinkInfo;
-use crate::component_tools::{
-    ComponentTool, RuntimeReason, RuntimeResult, ToolReason,
-};
-use orion_error::conversion_ext::ConvStructError;
 use orion_error::StructError;
+use orion_error::conversion_ext::ConvStructError;
 use rand::RngExt;
 use std::path::PathBuf;
 use std::sync::{
@@ -47,11 +45,25 @@ pub struct SinkPerformanceConfig {
 }
 
 impl SinkPerformanceConfig {
-    pub fn new() -> Self { Self::default() }
-    pub fn with_total_records(mut self, v: usize) -> Self { self.total_records = v; self }
-    pub fn with_task_count(mut self, v: usize) -> Self { self.task_count = v; self }
-    pub fn with_batch_size(mut self, v: usize) -> Self { self.batch_size = v; self }
-    pub fn with_progress_interval(mut self, v: Duration) -> Self { self.progress_interval = v; self }
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn with_total_records(mut self, v: usize) -> Self {
+        self.total_records = v;
+        self
+    }
+    pub fn with_task_count(mut self, v: usize) -> Self {
+        self.task_count = v;
+        self
+    }
+    pub fn with_batch_size(mut self, v: usize) -> Self {
+        self.batch_size = v;
+        self
+    }
+    pub fn with_progress_interval(mut self, v: Duration) -> Self {
+        self.progress_interval = v;
+        self
+    }
 }
 
 impl Default for SinkPerformanceConfig {
@@ -87,21 +99,38 @@ pub struct SinkPerformanceRuntime<T: ComponentTool, F: SinkFactory> {
 }
 
 impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F> {
-    pub fn new(component_tool: T, sink_infos: Vec<SinkInfo<F>>, config: SinkPerformanceConfig) -> Self {
-        Self { component_tool, sink_infos, config }
+    pub fn new(
+        component_tool: T,
+        sink_infos: Vec<SinkInfo<F>>,
+        config: SinkPerformanceConfig,
+    ) -> Self {
+        Self {
+            component_tool,
+            sink_infos,
+            config,
+        }
     }
 
     pub async fn run(&self) -> RuntimeResult<()> {
         println!("启动性能测试环境...");
-        self.component_tool.setup_and_up().await.map_err(|e| e.conv())?;
+        self.component_tool
+            .setup_and_up()
+            .await
+            .map_err(|e| e.conv())?;
 
         for (idx, sink_info) in self.sink_infos.iter().enumerate() {
             let kind = sink_info.factory().kind();
             let display_name = format_display_name(kind, sink_info.test_name(), idx);
             println!("\n========== 性能测试 Sink: {display_name} =========");
-            sink_info.wait_ready().await.map_err(|e| runtime_err(format!("{e}")))?;
+            sink_info
+                .wait_ready()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             println!("执行初始化...");
-            sink_info.init().await.map_err(|e| runtime_err(format!("{e}")))?;
+            sink_info
+                .init()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             self.run_single_sink(idx, &display_name, sink_info).await?;
         }
 
@@ -111,11 +140,17 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
     }
 
     async fn run_single_sink(
-        &self, _idx: usize, display_name: &str, sink_info: &SinkInfo<F>,
+        &self,
+        _idx: usize,
+        display_name: &str,
+        sink_info: &SinkInfo<F>,
     ) -> RuntimeResult<()> {
         let kind = sink_info.factory().kind();
         let count_before = if sink_info.has_count_fn() {
-            let c = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let c = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             println!("发送前数量: {c}");
             Some(c)
         } else {
@@ -144,7 +179,11 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
                 connector_id: format!("{}_task_{task_id}", base_spec.connector_id),
                 ..base_spec.clone()
             };
-            let sink = sink_info.factory().build(&spec, &ctx).await.map_err(|e| e.conv())?;
+            let sink = sink_info
+                .factory()
+                .build(&spec, &ctx)
+                .await
+                .map_err(|e| e.conv())?;
             task_specs.push((task_id, assigned, sink));
         }
 
@@ -184,15 +223,24 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
         for handle in handles {
             match handle.await {
                 Ok(Ok(())) => {}
-                Ok(Err(err)) => { task_failures += 1; eprintln!("❌ 性能测试任务失败: {err}"); }
-                Err(err) => { task_failures += 1; eprintln!("❌ 性能测试任务 panic/cancelled: {err}"); }
+                Ok(Err(err)) => {
+                    task_failures += 1;
+                    eprintln!("❌ 性能测试任务失败: {err}");
+                }
+                Err(err) => {
+                    task_failures += 1;
+                    eprintln!("❌ 性能测试任务 panic/cancelled: {err}");
+                }
             }
         }
 
         stop_monitor.notify_one();
         let monitor_summary = match monitor.await {
             Ok(s) => s,
-            Err(e) => { eprintln!("⚠️ 性能监控任务结束异常: {e}"); MonitorSummary::default() }
+            Err(e) => {
+                eprintln!("⚠️ 性能监控任务结束异常: {e}");
+                MonitorSummary::default()
+            }
         };
 
         let elapsed = start.elapsed();
@@ -214,7 +262,10 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
         println!("平均内存: {}", format_memory(monitor_summary.avg_memory));
 
         if let Some(before) = count_before {
-            let after = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let after = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             let diff = after - before;
             println!("数量校验新增: {diff}");
             if diff < sent_records as i64 {
@@ -225,13 +276,18 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
         }
 
         if task_failures > 0 {
-            return Err(runtime_err(format!("性能测试存在失败任务: {task_failures}")));
+            return Err(runtime_err(format!(
+                "性能测试存在失败任务: {task_failures}"
+            )));
         }
         Ok(())
     }
 
     fn spawn_monitor(
-        &self, counters: Arc<PerformanceCounters>, stop: Arc<Notify>, start: Instant,
+        &self,
+        counters: Arc<PerformanceCounters>,
+        stop: Arc<Notify>,
+        start: Instant,
     ) -> JoinHandle<MonitorSummary> {
         let interval = self.config.progress_interval;
         tokio::spawn(async move {
@@ -242,7 +298,8 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
                 .with_processes(ProcessRefreshKind::nothing().with_cpu().with_memory());
             let mut system = System::new_with_specifics(refresh_kind);
             system.refresh_processes_specifics(
-                ProcessesToUpdate::Some(&[pid]), false,
+                ProcessesToUpdate::Some(&[pid]),
+                false,
                 ProcessRefreshKind::nothing().with_cpu().with_memory(),
             );
             sleep(MINIMUM_CPU_UPDATE_INTERVAL).await;
@@ -260,7 +317,8 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
                     _ = stop.notified() => { break; }
                 }
                 system.refresh_processes_specifics(
-                    ProcessesToUpdate::Some(&[pid]), false,
+                    ProcessesToUpdate::Some(&[pid]),
+                    false,
                     ProcessRefreshKind::nothing().with_cpu().with_memory(),
                 );
                 let sent = counters.sent_records.load(Ordering::Relaxed);
@@ -290,9 +348,22 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
                     );
                 }
             }
-            let avg_cpu = if samples > 0 { (cpu_sum / samples as f64) as f32 } else { 0.0 };
-            let avg_memory = if samples > 0 { (memory_sum / samples as u128) as u64 } else { 0 };
-            MonitorSummary { peak_cpu, peak_memory, avg_cpu, avg_memory }
+            let avg_cpu = if samples > 0 {
+                (cpu_sum / samples as f64) as f32
+            } else {
+                0.0
+            };
+            let avg_memory = if samples > 0 {
+                (memory_sum / samples as u128) as u64
+            } else {
+                0
+            };
+            MonitorSummary {
+                peak_cpu,
+                peak_memory,
+                avg_cpu,
+                avg_memory,
+            }
         })
     }
 }
@@ -308,7 +379,10 @@ fn format_memory(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
     let mut idx = 0usize;
-    while value >= 1024.0 && idx < UNITS.len() - 1 { value /= 1024.0; idx += 1; }
+    while value >= 1024.0 && idx < UNITS.len() - 1 {
+        value /= 1024.0;
+        idx += 1;
+    }
     format!("{value:.2} {}", UNITS[idx])
 }
 
@@ -321,14 +395,23 @@ fn create_test_records(count: usize) -> Vec<Arc<DataRecord>> {
             let id = start_id + i as i64;
             let mut r = DataRecord::default();
             r.append(DataField::from_digit("wp_event_id", id));
-            r.append(DataField::from_chars("wp_src_key", format!("performance_test_{id}")));
+            r.append(DataField::from_chars(
+                "wp_src_key",
+                format!("performance_test_{id}"),
+            ));
             r.append(DataField::from_chars("sip", "192.168.1.100"));
             r.append(DataField::from_chars("timestamp", TS));
-            r.append(DataField::from_chars("http/request", format!("GET /api/perf/{id} HTTP/1.1")));
+            r.append(DataField::from_chars(
+                "http/request",
+                format!("GET /api/perf/{id} HTTP/1.1"),
+            ));
             r.append(DataField::from_digit("status", 200));
             r.append(DataField::from_digit("size", size));
             r.append(DataField::from_chars("referer", format!("perf-{id:06}")));
-            r.append(DataField::from_chars("http/agent", "Mozilla/5.0 (Performance Test)"));
+            r.append(DataField::from_chars(
+                "http/agent",
+                "Mozilla/5.0 (Performance Test)",
+            ));
             Arc::new(r)
         })
         .collect()

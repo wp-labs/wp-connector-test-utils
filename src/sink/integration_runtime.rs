@@ -1,11 +1,9 @@
 #![allow(dead_code)]
 
+use crate::component_tools::{ComponentTool, RuntimeReason, RuntimeResult, ToolReason};
 use crate::sink::sink_info::SinkInfo;
-use crate::component_tools::{
-    ComponentTool, RuntimeReason, RuntimeResult, ToolReason,
-};
-use orion_error::conversion_ext::ConvStructError;
 use orion_error::StructError;
+use orion_error::conversion_ext::ConvStructError;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -25,21 +23,33 @@ pub struct SinkIntegrationRuntime<T: ComponentTool, F: SinkFactory> {
 
 impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
     pub fn new(component_tool: T, sink_infos: Vec<SinkInfo<F>>) -> Self {
-        Self { component_tool, sink_infos }
+        Self {
+            component_tool,
+            sink_infos,
+        }
     }
 
     pub async fn run(&self, clear: bool) -> RuntimeResult<()> {
         println!("启动组件...");
-        self.component_tool.setup_and_up().await.map_err(|e| e.conv())?;
+        self.component_tool
+            .setup_and_up()
+            .await
+            .map_err(|e| e.conv())?;
 
         for (idx, sink_info) in self.sink_infos.iter().enumerate() {
             let kind = sink_info.factory().kind();
             let display_name = format_display_name(kind, sink_info.test_name(), idx);
             println!("\n========== 测试 Sink: {display_name} =========");
 
-            sink_info.wait_ready().await.map_err(|e| runtime_err(format!("{e}")))?;
+            sink_info
+                .wait_ready()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             println!("执行初始化...");
-            sink_info.init().await.map_err(|e| runtime_err(format!("{e}")))?;
+            sink_info
+                .init()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
 
             let spec = SinkSpec {
                 group: "integration_test".to_string(),
@@ -51,9 +61,16 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
             };
 
             let ctx = SinkBuildCtx::new(PathBuf::from("."));
-            let mut sink = sink_info.factory().build(&spec, &ctx).await.map_err(|e| e.conv())?;
+            let mut sink = sink_info
+                .factory()
+                .build(&spec, &ctx)
+                .await
+                .map_err(|e| e.conv())?;
 
-            let count_before = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let count_before = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             println!("发送前数量: {count_before}");
             let test_records = self.create_test_records(TEST_RECORD_COUNT);
             println!("发送 {TEST_RECORD_COUNT} 条数据...");
@@ -64,7 +81,10 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
 
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-            let count_after = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let count_after = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             let diff = count_after - count_before;
             if diff == TEST_RECORD_COUNT as i64 {
                 println!("✓ 数据发送成功，新增 {diff} 条记录");
@@ -76,13 +96,26 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
 
             println!("\n重启外部组件...");
             self.component_tool.restart().await.map_err(|e| e.conv())?;
-            self.component_tool.wait_started().await.map_err(|e| e.conv())?;
-            sink_info.wait_ready().await.map_err(|e| runtime_err(format!("{e}")))?;
+            self.component_tool
+                .wait_started()
+                .await
+                .map_err(|e| e.conv())?;
+            sink_info
+                .wait_ready()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
 
             println!("重启后再次发送数据...");
-            let count_before_restart = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let count_before_restart = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
 
-            let mut sink = sink_info.factory().build(&spec, &ctx).await.map_err(|e| e.conv())?;
+            let mut sink = sink_info
+                .factory()
+                .build(&spec, &ctx)
+                .await
+                .map_err(|e| e.conv())?;
             let retry_records = self.create_test_records(TEST_RECORD_COUNT);
             sink.sink
                 .sink_records(retry_records.iter().cloned().map(Arc::new).collect())
@@ -91,7 +124,10 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
 
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-            let count_after_restart = sink_info.count().await.map_err(|e| runtime_err(format!("{e}")))?;
+            let count_after_restart = sink_info
+                .count()
+                .await
+                .map_err(|e| runtime_err(format!("{e}")))?;
             let diff_restart = count_after_restart - count_before_restart;
             if diff_restart >= TEST_RECORD_COUNT as i64 {
                 println!("✓ 重启后数据发送成功，新增 {diff_restart} 条记录");
@@ -117,17 +153,26 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
                 let id = start_id + i as i64;
                 let mut record = DataRecord::default();
                 record.append(DataField::from_digit("wp_event_id", id));
-                record.append(DataField::from_chars("wp_src_key", format!("integration_test_{id}")));
+                record.append(DataField::from_chars(
+                    "wp_src_key",
+                    format!("integration_test_{id}"),
+                ));
                 record.append(DataField::from_chars("sip", "192.168.1.100"));
                 record.append(DataField::from_chars(
                     "timestamp",
                     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                 ));
-                record.append(DataField::from_chars("http/request", format!("GET /api/test/{id} HTTP/1.1")));
+                record.append(DataField::from_chars(
+                    "http/request",
+                    format!("GET /api/test/{id} HTTP/1.1"),
+                ));
                 record.append(DataField::from_digit("status", 200));
                 record.append(DataField::from_digit("size", 1024 + i as i64));
                 record.append(DataField::from_chars("referer", format!("{id:06}")));
-                record.append(DataField::from_chars("http/agent", "Mozilla/5.0 (Integration Test)"));
+                record.append(DataField::from_chars(
+                    "http/agent",
+                    "Mozilla/5.0 (Integration Test)",
+                ));
                 record
             })
             .collect()

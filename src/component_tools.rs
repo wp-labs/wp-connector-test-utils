@@ -50,7 +50,9 @@ pub trait ToolResultExt<T> {
     fn into_rt(self) -> RuntimeResult<T>;
 }
 impl<T> ToolResultExt<T> for ToolResult<T> {
-    fn into_rt(self) -> RuntimeResult<T> { self.map_err(|e| e.conv()) }
+    fn into_rt(self) -> RuntimeResult<T> {
+        self.map_err(|e| e.conv())
+    }
 }
 
 // ── ComponentTool（返回值改为 ToolResult）─────────────────
@@ -184,11 +186,21 @@ async fn docker_cmd(args: &[&str], file: &str, label: &str) -> ToolResult<std::p
 
 #[async_trait]
 impl ComponentTool for DockerComposeTool {
-    async fn pull_dependencies(&self) -> ToolResult<()> { self.pull().await }
-    async fn up(&self) -> ToolResult<()> { DockerComposeTool::up(self).await }
-    async fn down(&self) -> ToolResult<()> { DockerComposeTool::down(self).await }
-    async fn wait_started(&self) -> ToolResult<()> { DockerComposeTool::wait_started(self).await }
-    async fn restart(&self) -> ToolResult<()> { DockerComposeTool::restart(self).await }
+    async fn pull_dependencies(&self) -> ToolResult<()> {
+        self.pull().await
+    }
+    async fn up(&self) -> ToolResult<()> {
+        DockerComposeTool::up(self).await
+    }
+    async fn down(&self) -> ToolResult<()> {
+        DockerComposeTool::down(self).await
+    }
+    async fn wait_started(&self) -> ToolResult<()> {
+        DockerComposeTool::wait_started(self).await
+    }
+    async fn restart(&self) -> ToolResult<()> {
+        DockerComposeTool::restart(self).await
+    }
     async fn setup_and_up(&self) -> ToolResult<()> {
         self.up().await?;
         self.wait_started().await?;
@@ -217,18 +229,34 @@ pub struct ShellScriptTool {
 #[allow(dead_code)]
 impl ShellScriptTool {
     pub fn new<P: AsRef<Path>>(start_sh: P, stop_sh: P) -> ToolResult<Self> {
-        Self::new_with_options(start_sh, stop_sh, None::<P>, None::<P>, ShellScriptRestart::Default)
+        Self::new_with_options(
+            start_sh,
+            stop_sh,
+            None::<P>,
+            None::<P>,
+            ShellScriptRestart::Default,
+        )
     }
 
     pub fn new_with_ready<P: AsRef<Path>>(
-        start_sh: P, stop_sh: P, ready_sh: Option<P>,
+        start_sh: P,
+        stop_sh: P,
+        ready_sh: Option<P>,
     ) -> ToolResult<Self> {
-        Self::new_with_options(start_sh, stop_sh, None::<P>, ready_sh, ShellScriptRestart::Default)
+        Self::new_with_options(
+            start_sh,
+            stop_sh,
+            None::<P>,
+            ready_sh,
+            ShellScriptRestart::Default,
+        )
     }
 
     pub fn new_with_options<P: AsRef<Path>>(
-        start_sh: P, stop_sh: P,
-        install_deps_sh: Option<P>, ready_sh: Option<P>,
+        start_sh: P,
+        stop_sh: P,
+        install_deps_sh: Option<P>,
+        ready_sh: Option<P>,
         restart: ShellScriptRestart<P>,
     ) -> ToolResult<Self> {
         let check = |p: &Path, label: &str| -> ToolResult<()> {
@@ -364,9 +392,19 @@ impl ShellScriptTool {
 
 #[async_trait]
 impl ComponentTool for ShellScriptTool {
-    async fn pull_dependencies(&self) -> ToolResult<()> { self.install().await }
-    async fn up(&self) -> ToolResult<()> { ShellScriptTool::start(self).await }
-    async fn down(&self) -> ToolResult<()> { ShellScriptTool::stop(self).await }
-    async fn wait_started(&self) -> ToolResult<()> { ShellScriptTool::wait_started(self).await }
-    async fn restart(&self) -> ToolResult<()> { ShellScriptTool::restart(self).await }
+    async fn pull_dependencies(&self) -> ToolResult<()> {
+        self.install().await
+    }
+    async fn up(&self) -> ToolResult<()> {
+        ShellScriptTool::start(self).await
+    }
+    async fn down(&self) -> ToolResult<()> {
+        ShellScriptTool::stop(self).await
+    }
+    async fn wait_started(&self) -> ToolResult<()> {
+        ShellScriptTool::wait_started(self).await
+    }
+    async fn restart(&self) -> ToolResult<()> {
+        ShellScriptTool::restart(self).await
+    }
 }

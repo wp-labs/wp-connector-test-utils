@@ -1,6 +1,6 @@
 [package]
 name = "wp-connector-test-utils"
-version = "0.1.0"
+version = "0.1.1" #@gxl:set(version)
 edition = "2024"
 description = "Shared test infrastructure for wp-connectors and wp-connectors-labs"
 authors = ["WP Labs Team"]
