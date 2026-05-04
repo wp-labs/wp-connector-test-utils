@@ -1,3 +1,4 @@
 target/
 _gal/.report
 .run.gxl
+Cargo.lock

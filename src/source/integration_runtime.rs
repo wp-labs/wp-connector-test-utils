@@ -3,7 +3,7 @@
 use crate::component_tools::{ComponentTool, RuntimeReason, RuntimeResult, ToolReason};
 use crate::source::source_info::{SourceInfo, SourceRunPhase};
 use orion_error::StructError;
-use orion_error::conversion_ext::ConvStructError;
+use orion_error::conversion::{ConvErr, ConvStructError};
 use std::path::PathBuf;
 use tokio::time::{Instant as TokioInstant, sleep, timeout};
 use wp_connector_api::{SourceBuildCtx, SourceFactory, SourceHandle, SourceResult, SourceSpec};
@@ -27,10 +27,7 @@ impl<T: ComponentTool + Sync, F: SourceFactory> SourceIntegrationRuntime<T, F> {
 
     pub async fn run(&self, clear: bool) -> RuntimeResult<()> {
         println!("启动 Source 集成测试组件...");
-        self.component_tool
-            .setup_and_up()
-            .await
-            .map_err(|e| e.conv())?;
+        self.component_tool.setup_and_up().await.conv_err()?;
 
         for (idx, source_info) in self.source_infos.iter().enumerate() {
             let kind = source_info.factory().kind();
@@ -52,11 +49,8 @@ impl<T: ComponentTool + Sync, F: SourceFactory> SourceIntegrationRuntime<T, F> {
 
             if source_info.restart_verification() {
                 println!("\n重启外部组件...");
-                self.component_tool.restart().await.map_err(|e| e.conv())?;
-                self.component_tool
-                    .wait_started()
-                    .await
-                    .map_err(|e| e.conv())?;
+                self.component_tool.restart().await.conv_err()?;
+                self.component_tool.wait_started().await.conv_err()?;
                 source_info
                     .wait_ready()
                     .await
@@ -68,7 +62,7 @@ impl<T: ComponentTool + Sync, F: SourceFactory> SourceIntegrationRuntime<T, F> {
 
         if clear {
             println!("\n清理 Source 集成测试环境...");
-            self.component_tool.down().await.map_err(|e| e.conv())?;
+            self.component_tool.down().await.conv_err()?;
         }
         Ok(())
     }
@@ -95,7 +89,7 @@ impl<T: ComponentTool + Sync, F: SourceFactory> SourceIntegrationRuntime<T, F> {
 
         let ctx = SourceBuildCtx::new(PathBuf::from("."));
         let service: SourceResult<_> = source_info.factory().build(&spec, &ctx).await;
-        let mut service = service.map_err(|e| e.conv())?;
+        let mut service = service.conv_err()?;
         if service.sources.is_empty() {
             return Err(runtime_err(format!(
                 "{display_name} 未返回任何 SourceHandle"

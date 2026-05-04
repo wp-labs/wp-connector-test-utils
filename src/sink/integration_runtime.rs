@@ -3,7 +3,7 @@
 use crate::component_tools::{ComponentTool, RuntimeReason, RuntimeResult, ToolReason};
 use crate::sink::sink_info::SinkInfo;
 use orion_error::StructError;
-use orion_error::conversion_ext::ConvStructError;
+use orion_error::conversion::ConvErr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -31,10 +31,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
 
     pub async fn run(&self, clear: bool) -> RuntimeResult<()> {
         println!("启动组件...");
-        self.component_tool
-            .setup_and_up()
-            .await
-            .map_err(|e| e.conv())?;
+        self.component_tool.setup_and_up().await.conv_err()?;
 
         for (idx, sink_info) in self.sink_infos.iter().enumerate() {
             let kind = sink_info.factory().kind();
@@ -61,11 +58,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
             };
 
             let ctx = SinkBuildCtx::new(PathBuf::from("."));
-            let mut sink = sink_info
-                .factory()
-                .build(&spec, &ctx)
-                .await
-                .map_err(|e| e.conv())?;
+            let mut sink = sink_info.factory().build(&spec, &ctx).await.conv_err()?;
 
             let count_before = sink_info
                 .count()
@@ -77,7 +70,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
             sink.sink
                 .sink_records(test_records.iter().cloned().map(Arc::new).collect())
                 .await
-                .map_err(|e| e.conv())?;
+                .conv_err()?;
 
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -95,11 +88,8 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
             }
 
             println!("\n重启外部组件...");
-            self.component_tool.restart().await.map_err(|e| e.conv())?;
-            self.component_tool
-                .wait_started()
-                .await
-                .map_err(|e| e.conv())?;
+            self.component_tool.restart().await.conv_err()?;
+            self.component_tool.wait_started().await.conv_err()?;
             sink_info
                 .wait_ready()
                 .await
@@ -111,16 +101,12 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
                 .await
                 .map_err(|e| runtime_err(format!("{e}")))?;
 
-            let mut sink = sink_info
-                .factory()
-                .build(&spec, &ctx)
-                .await
-                .map_err(|e| e.conv())?;
+            let mut sink = sink_info.factory().build(&spec, &ctx).await.conv_err()?;
             let retry_records = self.create_test_records(TEST_RECORD_COUNT);
             sink.sink
                 .sink_records(retry_records.iter().cloned().map(Arc::new).collect())
                 .await
-                .map_err(|e| e.conv())?;
+                .conv_err()?;
 
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
@@ -140,7 +126,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
 
         if clear {
             println!("\n清理环境...");
-            self.component_tool.down().await.map_err(|e| e.conv())?;
+            self.component_tool.down().await.conv_err()?;
         }
         Ok(())
     }

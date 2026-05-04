@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use derive_more::From;
-use orion_error::conversion_ext::ConvStructError;
+use orion_error::conversion::ConvErr;
 use orion_error::{OrionError, StructError};
 use serde::Serialize;
 use std::path::Path;
@@ -51,7 +51,7 @@ pub trait ToolResultExt<T> {
 }
 impl<T> ToolResultExt<T> for ToolResult<T> {
     fn into_rt(self) -> RuntimeResult<T> {
-        self.map_err(|e| e.conv())
+        self.conv_err()
     }
 }
 

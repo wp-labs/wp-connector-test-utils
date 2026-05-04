@@ -3,7 +3,7 @@
 use crate::component_tools::{ComponentTool, RuntimeReason, RuntimeResult, ToolReason};
 use crate::sink::sink_info::SinkInfo;
 use orion_error::StructError;
-use orion_error::conversion_ext::ConvStructError;
+use orion_error::conversion::ConvErr;
 use rand::RngExt;
 use std::path::PathBuf;
 use std::sync::{
@@ -113,10 +113,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
 
     pub async fn run(&self) -> RuntimeResult<()> {
         println!("启动性能测试环境...");
-        self.component_tool
-            .setup_and_up()
-            .await
-            .map_err(|e| e.conv())?;
+        self.component_tool.setup_and_up().await.conv_err()?;
 
         for (idx, sink_info) in self.sink_infos.iter().enumerate() {
             let kind = sink_info.factory().kind();
@@ -135,7 +132,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
         }
 
         println!("\n清理性能测试环境...");
-        self.component_tool.down().await.map_err(|e| e.conv())?;
+        self.component_tool.down().await.conv_err()?;
         Ok(())
     }
 
@@ -179,11 +176,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
                 connector_id: format!("{}_task_{task_id}", base_spec.connector_id),
                 ..base_spec.clone()
             };
-            let sink = sink_info
-                .factory()
-                .build(&spec, &ctx)
-                .await
-                .map_err(|e| e.conv())?;
+            let sink = sink_info.factory().build(&spec, &ctx).await.conv_err()?;
             task_specs.push((task_id, assigned, sink));
         }
 
