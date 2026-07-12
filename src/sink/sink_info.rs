@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
 use wp_connector_api::{ParamMap, SinkFactory};
+use wp_model_core::model::DataRecord;
 
 /// 将任何可序列化的对象转换为 ParamMap
 #[allow(dead_code)]
@@ -34,6 +35,9 @@ pub type AsyncCountFn =
     Box<dyn Fn(ParamMap) -> Pin<Box<dyn Future<Output = Result<i64>> + Send>> + Send + Sync>;
 
 /// 异步就绪检查函数类型
+pub type RecordBuilderFn =
+    Box<dyn Fn(i64, usize) -> Vec<DataRecord> + Send + Sync>;
+
 pub type AsyncWaitReadyFn =
     Box<dyn Fn(ParamMap) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send + Sync>;
 
@@ -53,6 +57,8 @@ pub struct SinkInfo<F: SinkFactory> {
     count_fn: Option<AsyncCountFn>,
     /// Sink 级别的就绪检查（可选）
     wait_ready_fn: Option<AsyncWaitReadyFn>,
+    /// 记录构建函数
+    record_builder_fn: Option<RecordBuilderFn>,
 }
 
 impl<F: SinkFactory> SinkInfo<F> {
@@ -66,6 +72,7 @@ impl<F: SinkFactory> SinkInfo<F> {
             init_sh: None,
             count_fn: None,
             wait_ready_fn: None,
+            record_builder_fn: None,
         }
     }
 
@@ -112,6 +119,15 @@ impl<F: SinkFactory> SinkInfo<F> {
         Fut: Future<Output = Result<()>> + Send + 'static,
     {
         self.wait_ready_fn = Some(Box::new(move |params| Box::pin(wait_ready_fn(params))));
+        self
+    }
+
+    /// 设置记录构建函数
+    pub fn with_record_builder<R>(mut self, builder: R) -> Self
+    where
+        R: Fn(i64, usize) -> Vec<DataRecord> + Send + Sync + 'static,
+    {
+        self.record_builder_fn = Some(Box::new(builder));
         self
     }
 
