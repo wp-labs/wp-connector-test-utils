@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/wp-labs/wp-connector-test-utils"
 
 [dependencies]
-wp-connector-api = "0.10"
+wp-connector-api = "0.11"
 wp-model-core = "0.8"
 orion-error = "0.8"
 derive_more = "2.1"
