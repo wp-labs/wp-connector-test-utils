@@ -189,11 +189,12 @@ impl<T: ComponentTool + Sync, F: SinkFactory + Sync> SinkPerformanceRuntime<T, F
         for (task_id, assigned, mut sink) in task_specs {
             let counters = counters.clone();
             let batch_size = self.config.batch_size;
+            let record_builder = sink_info.record_builder();
             handles.push(tokio::spawn(async move {
                 let mut sent = 0usize;
                 while sent < assigned {
                     let current_batch = batch_size.min(assigned - sent);
-                    let records = create_test_records(current_batch);
+                    let records = create_test_records(current_batch, record_builder.as_ref());
                     match sink.sink.sink_records(records).await {
                         Ok(_) => {
                             sent += current_batch;
@@ -379,15 +380,22 @@ fn format_memory(bytes: u64) -> String {
     format!("{value:.2} {}", UNITS[idx])
 }
 
-fn create_test_records(count: usize) -> Vec<Arc<DataRecord>> {
+fn create_test_records(
+    count: usize,
+    record_builder: Option<&crate::sink::sink_info::RecordBuilderFn>,
+) -> Vec<Arc<DataRecord>> {
     let start_id = NEXT_PERF_RECORD_ID.fetch_add(count as i64, Ordering::SeqCst);
+    if let Some(builder) = record_builder {
+        return builder(start_id, count).into_iter().map(Arc::new).collect();
+    }
+
     const TS: &str = "2024-03-02 10:00:00";
     let size: i64 = RNG.with(|rng| rng.borrow_mut().random());
     (0..count)
         .map(|i| {
             let id = start_id + i as i64;
             let mut r = DataRecord::default();
-            r.append(DataField::from_digit("wp_event_id", id));
+            r.append(DataField::from_int("wp_event_id", id));
             r.append(DataField::from_chars(
                 "wp_src_key",
                 format!("performance_test_{id}"),
@@ -398,8 +406,8 @@ fn create_test_records(count: usize) -> Vec<Arc<DataRecord>> {
                 "http/request",
                 format!("GET /api/perf/{id} HTTP/1.1"),
             ));
-            r.append(DataField::from_digit("status", 200));
-            r.append(DataField::from_digit("size", size));
+            r.append(DataField::from_int("status", 200));
+            r.append(DataField::from_int("size", size));
             r.append(DataField::from_chars("referer", format!("perf-{id:06}")));
             r.append(DataField::from_chars(
                 "http/agent",

@@ -104,6 +104,25 @@ impl DockerComposeTool {
             .collect())
     }
 
+    /// 通过 `docker compose config --services` 获取 compose 文件里声明的服务名。
+    /// 旧实现把 `--services` 当成了 compose 顶层参数，CI 中会直接报 unknown flag。
+    async fn configured_services(&self) -> ToolResult<Vec<String>> {
+        self.services(
+            &["config", "--services"],
+            "获取 docker compose 配置中的服务列表",
+        )
+        .await
+    }
+
+    /// 通过 `docker compose ps --services --status running` 获取已启动的服务名。
+    async fn running_services(&self) -> ToolResult<Vec<String>> {
+        self.services(
+            &["ps", "--services", "--status", "running"],
+            "获取 docker compose 运行中的服务列表",
+        )
+        .await
+    }
+
     pub async fn pull(&self) -> ToolResult<()> {
         println!("==> 拉取镜像: {}", self.compose_file);
         docker_cmd(&["pull"], &self.compose_file, "docker compose pull").await?;
@@ -131,17 +150,10 @@ impl DockerComposeTool {
     }
 
     pub async fn wait_started(&self) -> ToolResult<()> {
-        let expected = self
-            .services(&["--services"], "获取 docker compose 服务列表")
-            .await?;
+        let expected = self.configured_services().await?;
 
         for attempt in 1..=10 {
-            let running = self
-                .services(
-                    &["--services", "--status", "running"],
-                    "获取 docker compose 运行状态",
-                )
-                .await?;
+            let running = self.running_services().await?;
 
             if expected.iter().all(|service| running.contains(service)) {
                 println!("✓ Docker Compose 服务已就绪，第 {} 次检查成功", attempt);

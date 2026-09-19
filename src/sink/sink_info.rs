@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use wp_connector_api::{ParamMap, SinkFactory};
 use wp_model_core::model::DataRecord;
 
@@ -35,11 +36,13 @@ pub type AsyncCountFn =
     Box<dyn Fn(ParamMap) -> Pin<Box<dyn Future<Output = Result<i64>> + Send>> + Send + Sync>;
 
 /// 异步就绪检查函数类型
-pub type RecordBuilderFn =
-    Box<dyn Fn(i64, usize) -> Vec<DataRecord> + Send + Sync>;
-
 pub type AsyncWaitReadyFn =
     Box<dyn Fn(ParamMap) -> Pin<Box<dyn Future<Output = Result<()>> + Send>> + Send + Sync>;
+
+/// 测试记录生成函数类型。
+///
+/// 参数为起始 ID 和记录数量，返回该批次要发送的 DataRecord。
+pub type RecordBuilderFn = Arc<dyn Fn(i64, usize) -> Vec<DataRecord> + Send + Sync>;
 
 /// Sink 集成测试信息结构体
 pub struct SinkInfo<F: SinkFactory> {
@@ -57,8 +60,8 @@ pub struct SinkInfo<F: SinkFactory> {
     count_fn: Option<AsyncCountFn>,
     /// Sink 级别的就绪检查（可选）
     wait_ready_fn: Option<AsyncWaitReadyFn>,
-    /// 记录构建函数
-    record_builder_fn: Option<RecordBuilderFn>,
+    /// 自定义测试记录生成器（可选）
+    record_builder: Option<RecordBuilderFn>,
 }
 
 impl<F: SinkFactory> SinkInfo<F> {
@@ -72,7 +75,7 @@ impl<F: SinkFactory> SinkInfo<F> {
             init_sh: None,
             count_fn: None,
             wait_ready_fn: None,
-            record_builder_fn: None,
+            record_builder: None,
         }
     }
 
@@ -122,12 +125,12 @@ impl<F: SinkFactory> SinkInfo<F> {
         self
     }
 
-    /// 设置记录构建函数
-    pub fn with_record_builder<R>(mut self, builder: R) -> Self
-    where
-        R: Fn(i64, usize) -> Vec<DataRecord> + Send + Sync + 'static,
-    {
-        self.record_builder_fn = Some(Box::new(builder));
+    /// 设置测试记录生成器（链式调用）
+    pub fn with_record_builder(
+        mut self,
+        builder: impl Fn(i64, usize) -> Vec<DataRecord> + Send + Sync + 'static,
+    ) -> Self {
+        self.record_builder = Some(Arc::new(builder));
         self
     }
 
@@ -149,6 +152,11 @@ impl<F: SinkFactory> SinkInfo<F> {
     /// 是否配置了数量检查
     pub fn has_count_fn(&self) -> bool {
         self.count_fn.is_some()
+    }
+
+    /// 获取自定义测试记录生成器
+    pub fn record_builder(&self) -> Option<RecordBuilderFn> {
+        self.record_builder.clone()
     }
 
     /// 执行初始化

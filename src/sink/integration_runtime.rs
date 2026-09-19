@@ -65,7 +65,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
                 .await
                 .map_err(|e| runtime_err(format!("{e}")))?;
             println!("发送前数量: {count_before}");
-            let test_records = self.create_test_records(TEST_RECORD_COUNT);
+            let test_records = self.create_test_records(sink_info, TEST_RECORD_COUNT);
             println!("发送 {TEST_RECORD_COUNT} 条数据...");
             sink.sink
                 .sink_records(test_records.iter().cloned().map(Arc::new).collect())
@@ -102,7 +102,7 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
                 .map_err(|e| runtime_err(format!("{e}")))?;
 
             let mut sink = sink_info.factory().build(&spec, &ctx).await.conv_err()?;
-            let retry_records = self.create_test_records(TEST_RECORD_COUNT);
+            let retry_records = self.create_test_records(sink_info, TEST_RECORD_COUNT);
             sink.sink
                 .sink_records(retry_records.iter().cloned().map(Arc::new).collect())
                 .await
@@ -131,14 +131,22 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
         Ok(())
     }
 
-    fn create_test_records(&self, count: usize) -> Vec<wp_model_core::model::DataRecord> {
+    fn create_test_records(
+        &self,
+        sink_info: &SinkInfo<F>,
+        count: usize,
+    ) -> Vec<wp_model_core::model::DataRecord> {
         use wp_model_core::model::{DataField, DataRecord};
         let start_id = NEXT_TEST_RECORD_ID.fetch_add(count as i64, Ordering::SeqCst);
+        if let Some(builder) = sink_info.record_builder() {
+            return builder(start_id, count);
+        }
+
         (0..count)
             .map(|i| {
                 let id = start_id + i as i64;
                 let mut record = DataRecord::default();
-                record.append(DataField::from_digit("wp_event_id", id));
+                record.append(DataField::from_int("wp_event_id", id));
                 record.append(DataField::from_chars(
                     "wp_src_key",
                     format!("integration_test_{id}"),
@@ -152,8 +160,8 @@ impl<T: ComponentTool + Sync, F: SinkFactory> SinkIntegrationRuntime<T, F> {
                     "http/request",
                     format!("GET /api/test/{id} HTTP/1.1"),
                 ));
-                record.append(DataField::from_digit("status", 200));
-                record.append(DataField::from_digit("size", 1024 + i as i64));
+                record.append(DataField::from_int("status", 200));
+                record.append(DataField::from_int("size", 1024 + i as i64));
                 record.append(DataField::from_chars("referer", format!("{id:06}")));
                 record.append(DataField::from_chars(
                     "http/agent",
